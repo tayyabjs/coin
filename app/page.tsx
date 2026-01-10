@@ -53,30 +53,49 @@ export default function Home() {
     }
   }
 
-  const generateSignal = (m: TokenMetrics) => {
-    let score = 0
-    let reasons: string[] = []
+// Inside your generateSignal function...
 
-    // 1. Fundamentals (Original Indicators)
-    if (m.fdvRatio <= 1.2) { score += 15; reasons.push("low dilution (good FDV)") }
-    if (m.liquidity >= m.marketCap * 0.1) { score += 15; reasons.push("stable liquidity") }
+const generateSignal = (m: TokenMetrics) => {
+  let technicalScore = 0;
+  let safetyScore = 0;
+  let reasons: string[] = [];
+  let warnings: string[] = [];
 
-    // 2. Technicals (Signal Group Indicators)
-    if (m.buyPressure > 1.8) { score += 25; reasons.push("aggressive buy pressure") }
-    if (m.volVelocity > 2) { score += 25; reasons.push("surging volume") }
-    if (m.priceChangeH1 > 3 && m.priceChangeH1 < 25) { score += 20; reasons.push("strong hourly momentum") }
+  // --- 1. TECHNICAL MOMENTUM (The "Pump" Potential) ---
+  if (m.buyPressure > 1.8) { technicalScore += 30; reasons.push("aggressive buy pressure"); }
+  if (m.volVelocity > 2) { technicalScore += 30; reasons.push("volume breakout"); }
+  if (m.priceChangeH1 > 5) { technicalScore += 20; reasons.push("upward trend"); }
 
-    let finalVerdict = ''
-    if (score >= 75) finalVerdict = '🚀 STRONG BUY SIGNAL'
-    else if (score >= 45) finalVerdict = '👀 WATCHLIST'
-    else finalVerdict = '❌ HIGH RISK / AVOID'
-
-    const summary = reasons.length > 0 
-      ? `Analysis detected ${reasons.join(', ')}. Technical alignment suggests a potential breakout.`
-      : "No significant accumulation patterns detected. Price action is currently neutral or bearish."
-
-    setAnalysis({ verdict: finalVerdict, score, summary })
+  // --- 2. SAFETY ENGINE (The "Anti-Rug" Logic) ---
+  // Check: Is there enough liquidity to actually sell?
+  const liqRatio = m.liquidity / m.marketCap;
+  if (liqRatio >= 0.15) {
+    safetyScore += 50; 
+  } else if (liqRatio < 0.05) {
+    warnings.push("Extremely thin liquidity (High Rug Risk)");
   }
+
+  // Check: FDV Gap (Hidden token unlocks)
+  if (m.fdvRatio < 1.1) {
+    safetyScore += 50;
+  } else {
+    warnings.push("High FDV/MC gap (Potential developer dump)");
+  }
+
+  // Final Calculations
+  const totalScore = (technicalScore * 0.7) + (safetyScore * 0.3);
+  
+  const finalVerdict = totalScore > 70 ? '🚀 EXPLOSIVE & SAFE' : 
+                       totalScore > 40 ? '⚠️ RISKY SPECULATION' : '❌ DO NOT BUY';
+
+  setAnalysis({ 
+    verdict: finalVerdict, 
+    score: Math.round(totalScore), 
+    summary: warnings.length > 0 
+      ? `WARNING: ${warnings.join(' | ')}` 
+      : `CLEAN SCAN: ${reasons.join(', ')}.`
+  });
+}
 
   return (
     <main className="max-w-2xl mx-auto p-6 bg-slate-50 min-h-screen font-sans">
