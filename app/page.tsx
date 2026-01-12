@@ -30,8 +30,8 @@ export default function AdvancedDEXScanner() {
   const [watchlist, setWatchlist] = useState([]);
   const [historicalData, setHistoricalData] = useState([]);
 
-  const refreshInterval = useRef<number | null>(null);
-
+  const refreshInterval = useRef<NodeJS.Timeout | null>(null);
+  
   // Auto-refresh effect
   useEffect(() => {
     if (autoRefresh && address) {
