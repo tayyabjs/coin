@@ -19,20 +19,100 @@ import {
   Wallet,
 } from 'lucide-react';
 
+// ===== TYPES =====
+interface PairData {
+  baseToken?: { address?: string; name?: string; symbol?: string };
+  marketCap?: number;
+  fdv?: number;
+  liquidity?: { usd?: number };
+  priceUsd?: string;
+  priceChange?: { m5?: number; h1?: number; h6?: number; h24?: number };
+  txns?: {
+    m5?: { buys: number; sells: number };
+    h1?: { buys: number; sells: number };
+    h24?: { buys: number; sells: number };
+  };
+  volume?: { m5?: number; h1?: number; h24?: number };
+  pairCreatedAt?: number;
+  dexId?: string;
+  pairAddress?: string;
+}
+
+interface AdvancedMetrics {
+  address: string | undefined;
+  name: string;
+  symbol: string;
+  price: number;
+  marketCap: number;
+  liquidity: number;
+  fdv: number;
+  priceChange: { m5: number; h1: number; h6: number; h24: number };
+  volume: { m5: number; h1: number; h24: number };
+  transactions: {
+    buys5m: number;
+    sells5m: number;
+    buys1h: number;
+    sells1h: number;
+    buys24h: number;
+    sells24h: number;
+  };
+  buyPressure: { m5: number; h1: number; h24: number };
+  volVelocity: number;
+  volAcceleration: number;
+  liqToMC: number;
+  volToMC: number;
+  volToLiq: number;
+  fdvRatio: number;
+  momentum: number;
+  whaleRatio: number;
+  avgBuySize: number;
+  avgSellSize: number;
+  pairCreatedAt: number | undefined;
+  priceImpact: number;
+  trendStrength: string;
+  dexId: string | undefined;
+  pairAddress: string | undefined;
+}
+
+interface HolderData {
+  topHolders: { rank: number; percentage: number; address: string; type: string }[];
+  top10Concentration: number;
+  totalHolders: number;
+  riskScore: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+interface AnalysisResult {
+  verdict: string;
+  score: number;
+  color: string;
+  action: string;
+  positionSize: string;
+  signals: { type: string; text: string }[];
+  redFlags: { type: string; text: string }[];
+  momentum: number;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+interface HistoricalPoint extends AdvancedMetrics {
+  timestamp: number;
+}
+
+// ===== COMPONENT =====
 export default function AdvancedDEXScanner() {
   const [address, setAddress] = useState('');
-  const [metrics, setMetrics] = useState(null);
+  const [metrics, setMetrics] = useState<AdvancedMetrics | null>(null);
+  const [deepAnalysis, setDeepAnalysis] = useState<AnalysisResult | null>(null);
+  const [holderData, setHolderData] = useState<HolderData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [deepAnalysis, setDeepAnalysis] = useState(null);
-  const [holderData, setHolderData] = useState(null);
+  const [historicalData, setHistoricalData] = useState<HistoricalPoint[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(false);
-  const [alerts, setAlerts] = useState([]);
-  const [watchlist, setWatchlist] = useState([]);
-  const [historicalData, setHistoricalData] = useState([]);
+  const [alerts, setAlerts] = useState<{ type: string; text: string; time: number }[]>([]);
+  const [watchlist, setWatchlist] = useState<
+    { address: string; symbol: string; price: number; score: number; addedAt: number }[]
+  >([]);
 
   const refreshInterval = useRef<NodeJS.Timeout | null>(null);
-  
-  // Auto-refresh effect
+
   useEffect(() => {
     if (autoRefresh && address) {
       refreshInterval.current = setInterval(() => {
@@ -57,7 +137,7 @@ export default function AdvancedDEXScanner() {
     if (!silent) setLoading(true);
 
     try {
-      // ✅ Clean URL — no extra spaces!
+      // ✅ FIXED: NO EXTRA SPACES IN URL
       const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
       const data = await res.json();
 
@@ -67,19 +147,16 @@ export default function AdvancedDEXScanner() {
         return;
       }
 
-      const pair = data.pairs[0];
+      const pair = data.pairs[0] as PairData;
       const advancedMetrics = calculateAdvancedMetrics(pair);
       const holders = simulateHolderData(advancedMetrics.marketCap);
 
       setHolderData(holders);
 
-      // Update historical data
-      const newHistoricalData = [...historicalData, { timestamp: Date.now(), ...advancedMetrics }].slice(-20);
+      const newHistoricalData = [...historicalData, { ...advancedMetrics, timestamp: Date.now() }].slice(-20);
       setHistoricalData(newHistoricalData);
 
       setMetrics(advancedMetrics);
-
-      // Pass historicalData explicitly to avoid stale closure
       const analysis = runDeepAnalysisEngine(advancedMetrics, holders, newHistoricalData);
       setDeepAnalysis(analysis);
 
@@ -92,7 +169,7 @@ export default function AdvancedDEXScanner() {
     }
   };
 
-  const simulateHolderData = (marketCap) => {
+  const simulateHolderData = (marketCap: number): HolderData => {
     const topHolders = [
       { rank: 1, percentage: 15.2, address: 'Dev/Team', type: 'dev' },
       { rank: 2, percentage: 8.5, address: 'Whale 1', type: 'whale' },
@@ -112,7 +189,7 @@ export default function AdvancedDEXScanner() {
     };
   };
 
-  const calculateAdvancedMetrics = (pair) => {
+  const calculateAdvancedMetrics = (pair: PairData): AdvancedMetrics => {
     const mc = pair.marketCap || pair.fdv || 0;
     const liq = pair.liquidity?.usd || 0;
 
@@ -184,7 +261,7 @@ export default function AdvancedDEXScanner() {
     };
   };
 
-  const calculateMomentum = (priceChange) => {
+  const calculateMomentum = (priceChange: { m5: number; h1: number; h6: number; h24: number }): number => {
     const m5Weight = 0.4;
     const h1Weight = 0.3;
     const h6Weight = 0.2;
@@ -197,7 +274,7 @@ export default function AdvancedDEXScanner() {
     );
   };
 
-  const calculateTrendStrength = (priceChange) => {
+  const calculateTrendStrength = (priceChange: { m5: number; h1: number; h6: number; h24: number }): string => {
     const positive = [priceChange.m5, priceChange.h1, priceChange.h6, priceChange.h24].filter((v) => v > 0).length;
     if (positive === 4) return 'STRONG UP';
     if (positive === 3) return 'UP';
@@ -206,28 +283,30 @@ export default function AdvancedDEXScanner() {
     return 'STRONG DOWN';
   };
 
-  const runDeepAnalysisEngine = (m, holders, histData) => {
-    let signals = [];
-    let redFlags = [];
+  const runDeepAnalysisEngine = (
+    m: AdvancedMetrics,
+    holders: HolderData,
+    histData: HistoricalPoint[]
+  ): AnalysisResult => {
+    let signals: { type: string; text: string }[] = [];
+    let redFlags: { type: string; text: string }[] = [];
     let score = 0;
 
     // Holder concentration
-    if (holders) {
-      if (holders.top10Concentration > 65) {
-        redFlags.push({ type: 'critical', text: '🚨 EXTREME CONCENTRATION - Top 10 holders own 65%+, massive dump risk' });
-        score -= 20;
-      } else if (holders.top10Concentration > 50) {
-        redFlags.push({ type: 'warning', text: '⚠️ High holder concentration - Top wallets control 50%+' });
-        score -= 12;
-      } else if (holders.top10Concentration < 35) {
-        signals.push({ type: 'safe', text: '✅ Decentralized holdings - Low concentration risk' });
-        score += 12;
-      }
+    if (holders.top10Concentration > 65) {
+      redFlags.push({ type: 'critical', text: '🚨 EXTREME CONCENTRATION - Top 10 holders own 65%+, massive dump risk' });
+      score -= 20;
+    } else if (holders.top10Concentration > 50) {
+      redFlags.push({ type: 'warning', text: '⚠️ High holder concentration - Top wallets control 50%+' });
+      score -= 12;
+    } else if (holders.top10Concentration < 35) {
+      signals.push({ type: 'safe', text: '✅ Decentralized holdings - Low concentration risk' });
+      score += 12;
+    }
 
-      if (holders.totalHolders > 1000) {
-        signals.push({ type: 'strong', text: `👥 Strong community - ${holders.totalHolders.toLocaleString()} holders` });
-        score += 10;
-      }
+    if (holders.totalHolders > 1000) {
+      signals.push({ type: 'strong', text: `👥 Strong community - ${holders.totalHolders.toLocaleString()} holders` });
+      score += 10;
     }
 
     // Momentum signals
@@ -357,7 +436,6 @@ export default function AdvancedDEXScanner() {
       }
     }
 
-    // Final score
     score = Math.max(0, Math.min(100, score + 35));
 
     let verdict = '🚫 AVOID';
@@ -400,8 +478,8 @@ export default function AdvancedDEXScanner() {
     };
   };
 
-  const checkAlerts = (m, analysis) => {
-    const newAlerts = [];
+  const checkAlerts = (m: AdvancedMetrics, analysis: AnalysisResult) => {
+    const newAlerts: { type: string; text: string; time: number }[] = [];
 
     if (analysis.score > 75 && analysis.score > (deepAnalysis?.score || 0)) {
       newAlerts.push({
@@ -435,7 +513,7 @@ export default function AdvancedDEXScanner() {
       setWatchlist((prev) => [
         ...prev,
         {
-          address: metrics.address,
+          address: metrics.address!,
           symbol: metrics.symbol,
           price: metrics.price,
           score: deepAnalysis.score,
@@ -445,7 +523,7 @@ export default function AdvancedDEXScanner() {
     }
   };
 
-  const removeFromWatchlist = (addr) => {
+  const removeFromWatchlist = (addr: string) => {
     setWatchlist((prev) => prev.filter((w) => w.address !== addr));
   };
 
@@ -942,10 +1020,20 @@ export default function AdvancedDEXScanner() {
     </div>
   );
 }
-
-// --- Helper Components ---
-
-function MetricCard({ icon, label, value, ideal, good }) {
+// --- Helper Components (add types) ---
+function MetricCard({
+  icon,
+  label,
+  value,
+  ideal,
+  good,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  ideal: string;
+  good: boolean;
+}) {
   return (
     <div
       className={`bg-slate-800/50 backdrop-blur border rounded-xl p-4 ${
@@ -953,20 +1041,28 @@ function MetricCard({ icon, label, value, ideal, good }) {
       }`}
     >
       <div className="flex items-center gap-2 mb-2">
-        <div className={good ? 'text-emerald-400' : 'text-slate-400'}>
-          {React.cloneElement(icon, { size: 18 })}
-        </div>
+        <div className={good ? 'text-emerald-400' : 'text-slate-400'}>{icon}</div>
         <p className="text-xs text-slate-400 font-medium">{label}</p>
       </div>
-      <p className={`text-2xl font-mono font-bold mb-1 ${good ? 'text-emerald-400' : 'text-slate-300'}`}>
-        {value}
-      </p>
+      <p className={`text-2xl font-mono font-bold mb-1 ${good ? 'text-emerald-400' : 'text-slate-300'}`}>{value}</p>
       <p className="text-xs text-slate-500">Ideal: {ideal}</p>
     </div>
   );
 }
 
-function TimeframeCard({ label, priceChange, buys, sells, volume }) {
+function TimeframeCard({
+  label,
+  priceChange,
+  buys,
+  sells,
+  volume,
+}: {
+  label: string;
+  priceChange: number;
+  buys: number;
+  sells: number;
+  volume: number;
+}) {
   const isPositive = priceChange > 0;
   const buyPressure = sells > 0 ? buys / sells : buys;
 
@@ -986,9 +1082,7 @@ function TimeframeCard({ label, priceChange, buys, sells, volume }) {
           <p className="text-xs text-slate-500">Pressure: {buyPressure.toFixed(2)}x</p>
         </>
       )}
-      {volume > 0 && (
-        <p className="text-xs text-slate-500 mt-1">Vol: ${(volume / 1000).toFixed(1)}K</p>
-      )}
+      {volume > 0 && <p className="text-xs text-slate-500 mt-1">Vol: ${(volume / 1000).toFixed(1)}K</p>}
     </div>
   );
 }
