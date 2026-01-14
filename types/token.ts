@@ -9,3 +9,4 @@ export interface TokenMetrics {
   volVelocity: number;   // New: Technical (Is volume spiking now?)
   priceChangeH1: number; // New: Trend Direction
 }
+
